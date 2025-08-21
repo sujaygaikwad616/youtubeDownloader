@@ -1,0 +1,57 @@
+# Azure DevOps Pipeline (Simple) - build Docker image on VM and restart container
+trigger:
+  branches:
+    include:
+      - master
+
+variables:
+  remotePath: '/opt/youtubeDownloader'
+  imageName: 'ytcaption'
+  containerName: 'ytcaption'
+  videoUrl: ''  # Optional; set in pipeline variables if you want automatic run
+
+stages:
+  - stage: Deploy
+    jobs:
+      - job: DeployJob
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: CopyFilesOverSSH@0
+            displayName: Copy source to VM
+            inputs:
+              sshEndpoint: 'VM-SSH-Service-Connection'
+              sourceFolder: '$(Build.SourcesDirectory)'
+              contents: '**'
+              targetFolder: '$(remotePath)'
+              overwrite: true
+              flattenFolders: false
+
+          - task: SSH@0
+            displayName: Build image & restart container
+            inputs:
+              sshEndpoint: 'VM-SSH-Service-Connection'
+              runOptions: 'commands'
+              commands: |
+                set -e
+                mkdir -p $(remotePath)/downloads
+                cd $(remotePath)
+                echo 'Building image'
+                docker build -t $(imageName):latest .
+                echo 'Stopping old container (if exists)'
+                docker rm -f $(containerName) || true
+                echo 'Starting new container'
+                if [ -n "$(videoUrl)" ]; then
+                  docker run -d --name $(containerName) --restart unless-stopped -e VIDEO_URL="$(videoUrl)" -v $(remotePath)/downloads:/downloads $(imageName):latest "$(videoUrl)"
+                else
+                  docker run -d --name $(containerName) --restart unless-stopped -v $(remotePath)/downloads:/downloads $(imageName):latest
+                fi
+                echo 'Done'
+
+# VM requirements:
+# sudo apt update && sudo apt install -y docker.io
+# sudo usermod -aG docker <user> (then re-login)
+# Pipeline requires an SSH service connection named VM-SSH-Service-Connection.

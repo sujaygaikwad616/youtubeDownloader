@@ -3,8 +3,13 @@ import os
 from sys import argv
 
 # ======== CONFIG ========
-url = argv[1]
-output_dir = "D:/youtubedownloads"
+# Allow URL to come from argument or environment variable VIDEO_URL
+url = argv[1] if len(argv) > 1 else os.environ.get("VIDEO_URL", "")
+if not url:
+    print("No URL provided. Pass as argument or set VIDEO_URL env var.")
+    exit(1)
+# Allow output directory override via OUTPUT_DIR env var (default inside container)
+output_dir = os.environ.get("OUTPUT_DIR", "D:/youtubedownloads" if os.name == 'nt' else "/downloads")
 language_code = "en"
 sub_format = "srt"
 fixed_caption_name = "caption"  
@@ -76,4 +81,5 @@ def extract_and_process_captions(url):
         print("❌ Captions (.srt) file was not found after download.")
 
 
-extract_and_process_captions(url)
+if __name__ == "__main__":
+    extract_and_process_captions(url)
